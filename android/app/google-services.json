@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "834201404220",
+    "project_id": "solidwaste4c",
+    "storage_bucket": "solidwaste4c.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:834201404220:android:d7e770aa5d7700dd939439",
+        "android_client_info": {
+          "package_name": "com.example.capstoneapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGNwugfSOTfkPayA8s31lhaJdpw7O8VpM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
