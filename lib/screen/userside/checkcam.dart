@@ -19,7 +19,7 @@ class _CheckTimePageState extends State<CheckTimePage> {
   Timer? _timer;
   String _latestImageDate = '';
 
-  @override
+   @override
   void initState() {
     super.initState();
     _populateDropdown();
@@ -41,71 +41,133 @@ class _CheckTimePageState extends State<CheckTimePage> {
     );
   }
 
-  void _startTimer() {
-    _timer = Timer.periodic(Duration(seconds: 10), (timer) {
-      if (_selectedCollectionPoint.isNotEmpty) {
-        _loadLatestImage(_selectedCollectionPoint);
-      }
-    });
-  }
+//   void _startTimer() {
+//     _timer = Timer.periodic(Duration(seconds: 10), (timer) {
+//       if (_selectedCollectionPoint.isNotEmpty) {
+//         _loadLatestImage(_selectedCollectionPoint);
+//       }
+//     });
+//   }
 
-  Future<void> _populateDropdown() async {
-    // Initial loading of collection points
-    final collectionPointsResponse = await _supabase
-        .from('collection_point')
-        .select('cp_name, cp_address')
-        .eq('cp_add_state', 'yes')
-        .order('cp_name', ascending: true);
+//  Future<void> _populateDropdown() async {
+//     // Initial loading of collection points
+//     final collectionPointsResponse = await _supabase
+//         .from('collection_point')
+//         .select('cp_name, cp_address')
+//         .eq('cp_add_state', 'yes')
+//         .order('cp_name', ascending: true);
 
-    if (collectionPointsResponse.isNotEmpty) {
-      setState(() {
-        _collectionPoints =
-            List<Map<String, dynamic>>.from(collectionPointsResponse);
-        _selectedCollectionPoint =
-            _collectionPoints.isNotEmpty ? _collectionPoints[0]['cp_name'] : '';
-      });
-      _loadLatestImage(_selectedCollectionPoint);
-    } else {
-      print('No collection points found.');
-    }
-  }
+//     if (collectionPointsResponse.isNotEmpty) {
+//       setState(() {
+//         _collectionPoints =
+//             List<Map<String, dynamic>>.from(collectionPointsResponse);
+//         _selectedCollectionPoint =
+//             _collectionPoints.isNotEmpty ? _collectionPoints[0]['cp_name'] : '';
+//       });
+//       _loadLatestImage(_selectedCollectionPoint);
+//     } else {
+//       print('No collection points found.');
+//     }
+//   }
 
-  Future<void> _loadLatestImage(String cpName) async {
+//   Future<void> _loadLatestImage(String cpName) async {
+//     setState(() {
+//       _loadingImage = true; // Show loading GIF
+//     });
+
+//     final latestImageResponse = await _supabase
+//         .from('images')
+//         .select('image_url, created_at')
+//         .eq('cp_id', cpName)
+//         .order('created_at', ascending: false)
+//         .limit(1);
+
+//     if (latestImageResponse.isNotEmpty) {
+//       final latestImage = latestImageResponse[0];
+//       final createdAt = DateTime.parse(latestImage['created_at']);
+//       final formattedDate = _formatDate(createdAt);
+
+//       if (mounted) {
+//         // Check if the widget is still mounted before calling setState
+//         setState(() {
+//           _latestImageUrl = latestImage['image_url'];
+//           _latestImageDate = formattedDate; // Save the formatted date
+//         });
+//       }
+//     }
+
+//     // Wait for 10 seconds before stopping the loading state
+//     await Future.delayed(Duration(seconds: 10));
+
+//     if (mounted) {
+//       // Check again before calling setState
+//       setState(() {
+//         _loadingImage = false; // Hide loading GIF after 10 seconds
+//       });
+//     }
+//   }
+Future<void> _populateDropdown() async {
+  final collectionPointsResponse = await _supabase
+      .from('collection_point')
+      .select('cp_name, cp_address')
+      .eq('cp_add_state', 'yes')
+      .order('cp_name', ascending: true);
+
+  if (collectionPointsResponse.isNotEmpty && mounted) {
     setState(() {
-      _loadingImage = true; // Show loading GIF
+      _collectionPoints =
+          List<Map<String, dynamic>>.from(collectionPointsResponse);
+      _selectedCollectionPoint =
+          _collectionPoints.isNotEmpty ? _collectionPoints[0]['cp_name'] : '';
     });
+    await _loadLatestImage(_selectedCollectionPoint); // Ensure this respects `mounted`
+  } else {
+    print('No collection points found.');
+  }
+}
 
-    final latestImageResponse = await _supabase
-        .from('images')
-        .select('image_url, created_at')
-        .eq('cp_id', cpName)
-        .order('created_at', ascending: false)
-        .limit(1);
+Future<void> _loadLatestImage(String cpName) async {
+  setState(() {
+    _loadingImage = true; // Show loading GIF
+  });
 
-    if (latestImageResponse.isNotEmpty) {
-      final latestImage = latestImageResponse[0];
-      final createdAt = DateTime.parse(latestImage['created_at']);
-      final formattedDate = _formatDate(createdAt);
+  final latestImageResponse = await _supabase
+      .from('images')
+      .select('image_url, created_at')
+      .eq('cp_id', cpName)
+      .order('created_at', ascending: false)
+      .limit(1);
 
-      if (mounted) {
-        // Check if the widget is still mounted before calling setState
-        setState(() {
-          _latestImageUrl = latestImage['image_url'];
-          _latestImageDate = formattedDate; // Save the formatted date
-        });
-      }
-    }
-
-    // Wait for 10 seconds before stopping the loading state
-    await Future.delayed(Duration(seconds: 10));
+  if (mounted && latestImageResponse.isNotEmpty) {
+    final latestImage = latestImageResponse[0];
+    final createdAt = DateTime.parse(latestImage['created_at']);
+    final formattedDate = _formatDate(createdAt);
 
     if (mounted) {
-      // Check again before calling setState
       setState(() {
-        _loadingImage = false; // Hide loading GIF after 10 seconds
+        _latestImageUrl = latestImage['image_url'];
+        _latestImageDate = formattedDate;
       });
     }
   }
+
+  await Future.delayed(Duration(seconds: 10));
+
+  if (mounted) {
+    setState(() {
+      _loadingImage = false; // Hide loading GIF
+    });
+  }
+}
+
+void _startTimer() {
+  _timer = Timer.periodic(Duration(seconds: 10), (timer) {
+    if (_selectedCollectionPoint.isNotEmpty && mounted) {
+      _loadLatestImage(_selectedCollectionPoint);
+    }
+  });
+}
+
 
   String _formatDate(DateTime date) {
     return "${date.month}/${date.day}/${date.year} ${_formatTime(date)}";
@@ -147,7 +209,8 @@ class _CheckTimePageState extends State<CheckTimePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Check Status'),
+        title: Text(''),
+       backgroundColor: Color.fromARGB(255, 47, 61, 2),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
@@ -253,37 +316,7 @@ class _CheckTimePageState extends State<CheckTimePage> {
               SizedBox(height: 5),
 
               // Buttons Section
-              Center(
-                  child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      _showQuickAlert(
-                        context,
-                        title: 'Check',
-                        message: 'Do you want to check?',
-                        onConfirm: () {
-                          Navigator.of(context).pop(); // Close alert
-                          _uploadRequest(); // Perform Check action
-                        },
-                      );
-                    },
-                    icon: Icon(
-                      Icons.search,
-                      color: Colors.white,
-                    ),
-                    label: Text(
-                      'Check',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          Colors.blue, // Set the button color to blue
-                    ),
-                  ),
-                ],
-              )),
+            
             ],
           ),
         ),

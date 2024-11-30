@@ -68,30 +68,15 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     _checkPermissions();
     _fetchCollectionPoints();
+
   }
+@override
+void dispose() {
+  print("MapScreen is being disposed.");
+  super.dispose();
+}
 
-  Future<void> _fetchCollectionPoints() async {
-    final List<Map<String, dynamic>> response = await Supabase.instance.client
-        .from('collection_point')
-        .select('cp_name, cp_address, cp_lat, cp_long, image_url');
-
-    for (var point in response) {
-      final String cpName = point['cp_name'];
-      final String cpAddress = point['cp_address'];
-      // final double cpLat = point['cp_lat'];
-      // final double cpLong = point['cp_long'];
-      final double cpLat = (point['cp_lat'] as num).toDouble();
-final double cpLong = (point['cp_long'] as num).toDouble();
-
-      final String imageUrl = point['image_url'];
-
-      // Add each collection point to the list and as a marker
-      final LatLng location = LatLng(cpLat, cpLong);
-      _collectionPoints.add(location);
-      _addMarker(cpName, cpAddress, cpLat, cpLong, imageUrl);
-    }
-  }
-
+  
   Future<void> _checkPermissions() async {
     bool serviceEnabled;
     LocationPermission permission;
@@ -115,20 +100,22 @@ final double cpLong = (point['cp_long'] as num).toDouble();
     _getUserLocation();
   }
 
-  Future<void> _getUserLocation() async {
-    try {
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      setState(() {
-        _userLocation = LatLng(position.latitude, position.longitude);
-        _addUserMarker(); // Add user marker specifically
-        _updateCamera();
-      });
-    } catch (e) {
-      print('Error getting location: $e');
-    }
+Future<void> _getUserLocation() async {
+  try {
+    Position position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+    if (!mounted) return; // Ensure widget is still active
+    setState(() {
+      _userLocation = LatLng(position.latitude, position.longitude);
+      _addUserMarker(); // Add user marker
+      _updateCamera();
+    });
+  } catch (e) {
+    print('Error getting location: $e');
   }
+}
+
 
   Future<double> _calculateDistance(LatLng origin, LatLng destination) async {
     return Geolocator.distanceBetween(
@@ -225,49 +212,132 @@ final double cpLong = (point['cp_long'] as num).toDouble();
       _showCurrentPolylines = !_showCurrentPolylines;
     });
   }
+  
 
-  void _addMarker(String name, String address, double lat, double long,
-      String imageUrl) async {
-    if (mapController != null) {
-      var markerIcon = await BitmapDescriptor.fromAssetImage(
-        const ImageConfiguration(),
-        'assets/img/binz.png',
-      );
+  Future<void> _fetchCollectionPoints() async {
+  try {
+    
+    final List<Map<String, dynamic>> collectionPoints = await Supabase.instance.client
+        .from('collection_point')
+        .select('cp_name, cp_address, cp_lat, cp_long, image_url');
 
-      setState(() {
-        _markers.add(
-          Marker(
-            markerId: MarkerId(name), // Unique marker ID
-            position: LatLng(lat, long), // Use fetched coordinates
-            icon: markerIcon,
-            onTap: () {
-              _showMarkerInfo(
-                title: name,
-                snippet: address,
-                imagePath: imageUrl,
-                onGetPressed: () {
-                  _togglePolylinesForLocation(
-                      LatLng(lat, long)); // Pass destination dynamically
-                },
-                onGetPressed2: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => CollectionPointsScreen(
-                        collectionPoint: name,
-                        collectionAddress: address,
-                      ),
-                    ),
-                  );
-                },
-                destination: LatLng(lat, long),
-              );
-            },
-          ),
+    final List<Map<String, dynamic>> historyData = await Supabase.instance.client
+        .from('history')
+        .select('status, cp_name, created_at')
+        .order('created_at', ascending: false);
+        
+
+    if (!mounted) return; // Exit if the widget is not mounted
+
+    setState(() {
+      _markers.clear(); // Clear old markers
+      for (var point in collectionPoints) {
+        final recentHistory = historyData.firstWhere(
+          (history) => history['cp_name'] == point['cp_name'],
+          orElse: () => {'status': 'emptied'},
         );
-      });
-    }
+        
+      
+        _addMarker(
+          point['cp_name'],
+          point['cp_address'],
+          (point['cp_lat'] as num).toDouble(),
+          (point['cp_long'] as num).toDouble(),
+          point['image_url'],
+          recentHistory['status'],
+        );
+        
+
+      }
+    });
+  } catch (e) {
+    print('Error fetching collection points: $e');
+    if (!mounted) return; // Avoid triggering SnackBar if the widget is not mounted
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Failed to load collection points. Please try again.')),
+    );
   }
+}
+
+
+ Future<void> _fetchCollectionPointz() async {
+  final List<Map<String, dynamic>> collectionPoints = await Supabase.instance.client
+      .from('collection_point')
+      .select('cp_name, cp_address, cp_lat, cp_long, image_url');
+
+  final List<Map<String, dynamic>> historyData = await Supabase.instance.client
+      .from('history')
+      .select('status, cp_name, created_at')
+      .order('created_at', ascending: false);
+
+  for (var point in collectionPoints) {
+    final String cpName = point['cp_name'];
+    final String cpAddress = point['cp_address'];
+    final double cpLat = (point['cp_lat'] as num).toDouble();
+    final double cpLong = (point['cp_long'] as num).toDouble();
+    final String imageUrl = point['image_url'];
+
+    // Find the most recent status for this collection point
+    final recentHistory = historyData.firstWhere(
+      (history) => history['cp_name'] == cpName,
+      orElse: () => {'status': 'emptied'}, 
+    );
+
+    final String status = recentHistory['status'];
+
+    // Add each collection point as a marker with dynamic status
+    _addMarker(cpName, cpAddress, cpLat, cpLong, imageUrl, status);
+  }
+}
+
+void _addMarker(String name, String address, double lat, double long, String imageUrl, String status) async {
+  if (mapController != null) {
+    // Choose icon based on status
+    String assetPath = (status == 'full') ? 'assets/img/rbasura.png' : 'assets/img/gbasura.png';
+
+    var markerIcon = await BitmapDescriptor.fromAssetImage(
+      const ImageConfiguration(size: Size(48, 48)),
+      assetPath,
+    );
+
+    setState(() {
+      _markers.add(
+        Marker(
+          markerId: MarkerId(name), // Unique marker ID
+          position: LatLng(lat, long), // Use fetched coordinates
+          icon: markerIcon,
+          onTap: () {
+            _showMarkerInfo(
+              title: name,
+              snippet: address,
+              imagePath: imageUrl,
+              onGetPressed: () {
+                _togglePolylinesForLocation(
+                  LatLng(lat, long),
+                ); // Pass destination dynamically
+              },
+              onGetPressed2: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => CollectionPointsScreen(
+                      collectionPoint: name,
+                      collectionAddress: address,
+                    ),
+                  ),
+                );
+              },
+              destination: LatLng(lat, long),
+            );
+          },
+        ),
+      );
+    });
+  }
+}
+
+
+
 
   void _showMarkerInfo({
     required String title,
@@ -333,7 +403,7 @@ final double cpLong = (point['cp_long'] as num).toDouble();
                     const SizedBox(width: 20),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey,
+                        backgroundColor: const Color.fromARGB(255, 18, 158, 60),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(20),
                         ),
@@ -567,81 +637,101 @@ final double cpLong = (point['cp_long'] as num).toDouble();
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Solid Waste Management Map',
-          style: TextStyle(color: Colors.white),
-        ),
-        centerTitle: true,
-        backgroundColor: Color.fromARGB(255, 47, 61, 2),
+  Future<void> _refreshCollectionHistory() async {
+  setState(() {
+    _fetchCollectionPointz();
+  });
+
+  await _fetchCollectionPoints(); 
+}
+
+
+ @override
+Widget build(BuildContext context) {
+  return Scaffold(
+    appBar: AppBar(
+      title: const Text(
+        '',
+        style: TextStyle(color: Colors.white),
       ),
-      body: GoogleMap(
-        onMapCreated: (controller) {
-          mapController = controller;
-          _updateCamera();
-        },
-        initialCameraPosition: CameraPosition(
-          target: _userLocation ??
-              (_collectionPoints.isNotEmpty
-                  ? _collectionPoints.first
-                  : LatLng(0, 0)),
-          zoom: _zoomLevel,
-        ),
-        myLocationEnabled: true,
-        myLocationButtonEnabled: true,
-        markers: _markers,
-        polylines: _polylines,
-        mapType: MapType.normal,
+      centerTitle: true,
+      backgroundColor: Color.fromARGB(255, 47, 61, 2),
+    ),
+    body: GoogleMap(
+      onMapCreated: (controller) {
+        mapController = controller;
+        _updateCamera();
+      },
+      initialCameraPosition: CameraPosition(
+        target: _userLocation ??
+            (_collectionPoints.isNotEmpty
+                ? _collectionPoints.first
+                : LatLng(0, 0)),
+        zoom: _zoomLevel,
       ),
-      bottomSheet: _hasRoute
-          ? Container(
-              padding: const EdgeInsets.all(16.0),
-              color: Colors.white,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Route Information',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
+      myLocationEnabled: true,
+      myLocationButtonEnabled: true,
+      markers: _markers,
+      polylines: _polylines,
+      mapType: MapType.normal,
+    ),
+    // Add the FloatingActionButton at the left
+    // floatingActionButton: Align(
+    //   alignment: Alignment.centerLeft,
+    //   child: FloatingActionButton(
+    //     onPressed: () {
+    //       _refreshCollectionHistory();
+    //     },
+    //     child: const Icon(Icons.refresh),
+    //     backgroundColor: Colors.green,
+    //   ),
+    // ),
+    bottomSheet: _hasRoute
+        ? Container(
+            padding: const EdgeInsets.all(16.0),
+            color: Colors.white,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Route Information',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () {
-                          _removePolylines(); // Remove the polyline
-                          setState(() {
-                            _hasRoute =
-                                false; // Update state to hide the bottom sheet
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        _removePolylines(); // Remove the polyline
+                        setState(() {
+                          _hasRoute = false; // Hide the bottom sheet
+                        });
+                      },
+                    ),
+                  ],
+                ),
+                    const SizedBox(height: 10),
                   Text(
                     'Distance: ${_distanceToDestination.toStringAsFixed(2)} km',
                     style: const TextStyle(fontSize: 16),
                   ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                   const SizedBox(height: 10),
+               Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _buildRouteInfo('🚶 Walk', _calculateWalkingTime()),
                       _buildRouteInfo('🚗 Drive', _calculateDrivingTime()),
                     ],
                   ),
-                ],
-              ),
-            )
-          : null, // Do not show the bottom sheet if no route is available
-    );
-  }
+              ],
+            ),
+          )
+        : null,
+  );
+}
+
 }

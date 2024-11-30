@@ -12,24 +12,29 @@ class LoginNaba extends StatelessWidget {
     final user = supabase.auth.currentUser;
 
     if (user != null) {
-      final userProfileResponse = await supabase
-          .from('useraccount')
-          .select()
-          .eq('uid', user.id) 
-          .single();
+      try {
+        final userProfileResponse = await supabase
+            .from('useraccount')
+            .select()
+            .eq('uid', user.id)
+            .single();
 
-      if (userProfileResponse.isNotEmpty) {
-        return 'useraccount';
-      }
+        if (userProfileResponse.isNotEmpty) {
+          return 'useraccount';
+        }
 
-      final collectorProfileResponse = await supabase
-          .from('collector')
-          .select()
-          .eq('uid', user.id)
-          .single();
+        final collectorProfileResponse = await supabase
+            .from('collector')
+            .select()
+            .eq('uid', user.id)
+            .single();
 
-      if (collectorProfileResponse.isNotEmpty) {
-        return 'collector';
+        if (collectorProfileResponse.isNotEmpty) {
+          return 'collector';
+        }
+      } catch (error) {
+        // Log the error if needed for debugging
+        debugPrint('Error fetching role: $error');
       }
     }
     return null;
@@ -56,12 +61,27 @@ class LoginNaba extends StatelessWidget {
                   if (role == 'collector') {
                     return const HomeScreen();
                   } else if (role == 'useraccount') {
-                    return const UserHomeScreen(); 
+                    return const UserHomeScreen();
                   } else {
-                    return const Center(child: Text('Role not recognized'));
+                   Supabase.instance.client.auth.signOut().then((_) {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (context) => const FirstScreen()),
+                      (route) => false,
+                    );
+                  });
+                  return const Center(child: CircularProgressIndicator());
                   }
                 } else {
-                  return const Center(child: Text('Error fetching role'));
+                 
+                  Supabase.instance.client.auth.signOut().then((_) {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (context) => const FirstScreen()),
+                      (route) => false,
+                    );
+                  });
+                  return const Center(child: CircularProgressIndicator());
                 }
               },
             );
